@@ -1,0 +1,59 @@
+version: '2'
+services:
+  redis:
+    container_name: redis
+    image: redis:3-alpine
+    restart: always
+
+  redash_server:
+    container_name: redash_server
+    image: redash/redash:3.0.0.b3134
+    command: server
+    depends_on:
+      - redis
+    ports:
+      - 5000:5000
+    environment:
+      - TZ=Asia/Tokyo
+      - PYTHONUNBUFFERED=0
+      - GUNICORN_CMD_ARGS=--timeout 300
+      - REDASH_ADDITIONAL_QUERY_RUNNERS=redash.query_runner.python
+      - REDASH_LOG_LEVEL=INFO
+      - REDASH_REDIS_URL=redis://redis:6379/0
+      - REDASH_DATABASE_URL=postgresql://redash:passwd@172.16.0.1/redash
+      - REDASH_COOKIE_SECRET=abcdefghijklmnopqrstuvwxyz
+      - REDASH_ALLOW_PARAMETERS_IN_EMBEDS=True
+      - REDASH_LOG_STDOUT=True
+      - REDASH_ALLOW_SCRIPTS_IN_USER_INPUT=False
+      - REDASH_WEB_WORKERS=4
+    restart: always
+  redash_worker:
+    container_name: redash_worker
+    image: redash/redash:3.0.0.b3134
+    command: scheduler
+    environment:
+      - TZ=Asia/Tokyo
+      - PYTHONUNBUFFERED=0
+      - REDASH_ADDITIONAL_QUERY_RUNNERS=redash.query_runner.python
+      - REDASH_LOG_LEVEL=INFO
+      - REDASH_REDIS_URL=redis://redis:6379/0
+      - REDASH_DATABASE_URL=postgresql://redash:passwd@172.16.0.1/redash
+      - REDASH_COOKIE_SECRET=abcdefghijklmnopqrstuvwxyz
+      - REDASH_ALLOW_PARAMETERS_IN_EMBEDS=True
+      - REDASH_LOG_STDOUT=True
+      - REDASH_ALLOW_SCRIPTS_IN_USER_INPUT=False
+      - QUEUES=queries,scheduled_queries,celery
+      - WORKERS_COUNT=2
+    restart: always
+
+  nginx:
+    build: nginx
+    container_name: nginx
+    image: redash_nginx
+    ports:
+      - 80:80
+    depends_on:
+      - redash_server
+    links:
+      - redash_server:redash
+    restart: always
